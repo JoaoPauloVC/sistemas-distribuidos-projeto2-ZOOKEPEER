@@ -26,6 +26,7 @@ class Peer:
                     break
                 except ValueError:
                     print("Por favor, insira um valor válido para a porta.")
+        print("Inicializar Chegou Aqui")
 
         # Implemente outras etapas de inicialização, se necessário
 
@@ -53,20 +54,34 @@ class Peer:
 
             except Exception as e:
                 print(f"Erro ao enviar a requisição PUT: {e}")
+        print("PUT Chegou Aqui")
+        
 
     
     def enviar_requisicao_get(self, key):
         for conexao in self.conexoes:
             try:
                 mensagem = Mensagem("GET", key=key)
-                # Serialize a mensagem para uma string (exemplo: json.dumps(mensagem))
-                # Envie a mensagem através da conexão
+                mensagem_serializada = mensagem.to_json()
+
+                # Envie a mensagem serializada através da conexão com o servidor
+                conexao.send(mensagem_serializada.encode())
+
                 # Receba a resposta do servidor
-                # Realize o tratamento da resposta conforme o necessário
-                # Exiba os resultados, se necessário
-                # Lembre-se de fechar a conexão após o uso (conexao.close())
+                resposta_serializada = conexao.recv(1024).decode()
+
+                # Realize o tratamento da resposta do servidor
+                resposta = Mensagem.from_json(resposta_serializada)
+                if resposta.tipo == "GET_RESPONSE":
+                    # Exiba os resultados
+                    print(f"GET key: {key} value: {resposta.value} obtido do servidor {conexao.getpeername()}, meu timestamp {resposta.timestamp} e do servidor {resposta.timestamp_servidor}")
+
+                # Lembre-se de fechar a conexão após o uso
+                conexao.close()
+
             except Exception as e:
                 print(f"Erro ao enviar a requisição GET: {e}")
+        print("GET Chegou Aqui")
     
     def exibir_menu(self):
         while True:
