@@ -26,7 +26,7 @@ class Peer:
                     break
                 except ValueError:
                     print("Por favor, insira um valor válido para a porta.")
-        print("Inicializar Chegou Aqui")
+        print("Inicialização Concluída")
 
         # Implemente outras etapas de inicialização, se necessário
 
@@ -54,7 +54,7 @@ class Peer:
 
             except Exception as e:
                 print(f"Erro ao enviar a requisição PUT: {e}")
-        print("PUT Chegou Aqui")
+        print("PUT Concluído")
         
 
     
@@ -81,7 +81,7 @@ class Peer:
 
             except Exception as e:
                 print(f"Erro ao enviar a requisição GET: {e}")
-        print("GET Chegou Aqui")
+        print("GET Concluído")
     
     def exibir_menu(self):
         while True:
