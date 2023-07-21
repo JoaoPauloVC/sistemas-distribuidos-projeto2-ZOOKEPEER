@@ -11,7 +11,8 @@ class Servidor:
         self.socket_servidor = None
         self.respostas_replicacao = {}  # Dicionário para armazenar respostas de replicação_ok
         self.tabelahash = {}  # Tabela hash local para armazenar as chaves e valores das requisições PUT
-        # self.servidores_conectados = []  # Lista para armazenar os endereços dos servidores conectados ao líder
+        ############ COMO servidor líder pode saber dos outros?
+        self.servidores_conectados = []  # Lista para armazenar os endereços dos servidores conectados ao líder
 
 
 
@@ -22,7 +23,7 @@ class Servidor:
         self.socket_servidor.listen(5)
         print(f"Servidor iniciado em {self.ip}:{self.porta}")
         # Caso não seja o Líder, envia um sinal para o Líder saber para quem deve replicar as mensagens
-        if(self.ip != self.ip_lider & self.porta != self.porta_lider):
+        if(self.ip != self.ip_lider and self.porta != self.porta_lider):
             # Implementar código que faz com que o Servidor passe seu IP e Porta para o Servidor Líder armazenar na listade servidores conectados
             pass
         self.executar()
@@ -51,7 +52,7 @@ class Servidor:
     def receber_requisicoes(self):
         while True:
             conexao, endereco = self.socket_servidor.accept()
-            print(f"Nova conexão estabelecida: {endereco}")
+            print(f"Nova conexão estabelecida (TEM QUE REMOVER ISTO): {endereco}")
             threading.Thread(target=self.tratar_requisicoes, args=(conexao, endereco)).start()
 
     
@@ -84,8 +85,8 @@ class Servidor:
         if not (self.ip == self.ip_lider and self.porta == self.porta_lider):
             # O servidor não deve replicar informações se não for o líder
             return
-
-        for endereco_servidor in self.endereco_servidores[1:]:  # Exclui o próprio líder da lista
+################### ARRUMAR ESTE FOR
+        for endereco_servidor in self.servidores_conectados:  # Exclui o próprio líder da lista
             try:
                 conexao_secundario = socket.socket()
                 conexao_secundario.connect(endereco_servidor)
