@@ -1,6 +1,6 @@
 import socket
-
 from mensagem import Mensagem
+import random
 
 
 class Peer:
@@ -11,7 +11,7 @@ class Peer:
 
     # Seção 4.a - Inicialização do Peer
     def inicializar(self):
-        num_servidores = 3  # Número de servidores
+        num_servidores = 2  # Número de servidores
 
         for i in range(num_servidores):
             while True:
@@ -24,66 +24,57 @@ class Peer:
                     break
                 except ValueError:
                     print("Por favor, insira um valor válido para a porta.")
-        print("Inicialização Concluída")
-
-        # Implemente outras etapas de inicialização, se necessário
 
     # Seção 4.b - Envio do PUT
     def enviar_requisicao_put(self, key, value):
-        for endereco_servidores in self.endereco_servidores:
-            try:
-                mensagem = Mensagem("PUT", key=key, value=value)
-                mensagem_serializada = mensagem.to_json()
-                
-                # Envie a mensagem serializada através da conexão com o servidor
-                conexao_server = socket.socket()
-                conexao_server.connect(endereco_servidores)
-                conexao_server.send(mensagem_serializada.encode())
-                
-                conexao_server.close()
+        servidor_escolhido = random.choice(self.endereco_servidores)
+        try:
+            mensagem = Mensagem("PUT", key=key, value=value)
+            mensagem_serializada = mensagem.to_json()
+            
+            # Envia a mensagem serializada através da conexão com o servidor
+            conexao_server = socket.socket()
+            conexao_server.connect(servidor_escolhido)
+            conexao_server.send(mensagem_serializada.encode())
+            
+            # conexao_server.close()
 
-                # Receba a resposta do servidor
-                resposta_serializada = endereco_servidores.recv(1024).decode()
+            # Resposta do servidor
+            resposta_serializada = conexao_server.recv(1024).decode()
 
-                # Realize o tratamento da resposta do servidor
-                resposta = Mensagem.from_json(resposta_serializada)
-                if resposta.tipo == "PUT_OK":
-                    # Exiba os resultados
-                    print(f"PUT_OK key: {key} value: {value} timestamp: {resposta.timestamp} realizada no servidor {endereco_servidores.getpeername()}")
+            # Tratamento da resposta do servidor
+            resposta = Mensagem.from_json(resposta_serializada)
+            if resposta.tipo == "PUT_OK":
+                print(f"PUT_OK key: {key} value: {value} timestamp: {resposta.timestamp} realizada no servidor {endereco_servidores.getpeername()}")
 
-                # Lembre-se de fechar a conexão após o uso
-                endereco_servidores.close()
+            conexao_server.close()
 
-            except Exception as e:
-                print(f"Erro ao enviar a requisição PUT: {e}")
-        print("PUT Concluído")
+        except Exception as e:
+            print(f"Erro ao enviar a requisição PUT: {e}")
         
-
-    
     def enviar_requisicao_get(self, key):
-        for endereco_servidores in self.endereco_servidores:
-            try:
-                mensagem = Mensagem("GET", key=key)
-                mensagem_serializada = mensagem.to_json()
+        servidor_escolhido = random.choice(self.endereco_servidores)
+        try:
+            mensagem = Mensagem("GET", key=key)
+            mensagem_serializada = mensagem.to_json()
 
-                # Envie a mensagem serializada através da conexão com o servidor
-                endereco_servidores.send(mensagem_serializada.encode())
+            # Envia a mensagem serializada para o servidor escolhido
+            conexao_server = socket.socket()
+            conexao_server.connect(servidor_escolhido)
+            conexao_server.send(mensagem_serializada.encode())
 
-                # Receba a resposta do servidor
-                resposta_serializada = endereco_servidores.recv(1024).decode()
+            # Resposta do servidor
+            resposta_serializada = conexao_server.recv(1024).decode()
 
-                # Realize o tratamento da resposta do servidor
-                resposta = Mensagem.from_json(resposta_serializada)
-                if resposta.tipo == "GET_RESPONSE":
-                    # Exiba os resultados
-                    print(f"GET key: {key} value: {resposta.value} obtido do servidor {endereco_servidores.getpeername()}, meu timestamp {resposta.timestamp} e do servidor {resposta.timestamp_servidor}")
+            # Tratamento da resposta do servidor
+            resposta = Mensagem.from_json(resposta_serializada)
+            if resposta.tipo == "GET_RESPONSE":
+                print(f"GET key: {key} value: {resposta.value} obtido do servidor {servidor_escolhido}, meu timestamp {resposta.timestamp} e do servidor {resposta.timestamp_servidor}")
 
-                # Lembre-se de fechar a conexão após o uso
-                endereco_servidores.close()
+            conexao_server.close()
 
-            except Exception as e:
-                print(f"Erro ao enviar a requisição GET: {e}")
-        print("GET Concluído")
+        except Exception as e:
+            print(f"Erro ao enviar a requisição GET: {e}")
     
     def exibir_menu(self):
         while True:
@@ -119,7 +110,6 @@ if __name__ == "__main__":
     peer = Peer()
     peer_ip = input("Peer IP: ")
     peer_porta = int(input("Peer Porta: "))
-    diretorio = input("Pasta onde os arquivos estão armazenados: ")
     
     # Configurar as informações do peer
     peer.ip_servidores = [peer_ip]  # Insira os IPs dos servidores
