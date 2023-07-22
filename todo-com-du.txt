@@ -2,6 +2,8 @@ TODO:
 
 REMOVER LINHAS ABAIXO DE COMENTÁRIOS INICIADOS COM ####
 
+replicar_informacao deve estar com erro no for
+
 Em Inicializar:
 	Enviar endereço par ao líder, caso não o seja (IF que verifica se é líder):
 	

@@ -57,7 +57,10 @@ class Servidor:
         print(f"Conexão encerrada: {endereco}")
     
     def adiciona_servidor(self, mensagem):
-        pass
+        # Processar a requisição SERVIDOR_JOIN e enviar replicação para os servidores secundários
+        servidor_ip = mensagem.ip
+        servidor_porta = mensagem.porta
+        self.servidores_conectados.append((servidor_ip, servidor_porta))
     
     def receber_requisicoes(self):
         while True:
