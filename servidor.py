@@ -1,18 +1,22 @@
 import socket
+import time
 import threading
 from mensagem import Mensagem
 
 class Servidor:
-    def __init__(self, ip, porta, ip_lider, porta_lider):
-        self.ip = ip
-        self.porta = porta
-        self.ip_lider = ip_lider
-        self.porta_lider = porta_lider
-        self.socket_servidor = None
-        self.respostas_replicacao = {}  # Dicionário para armazenar respostas de replicação_ok
+    
+    # Atribuitos da Classe Servidor
+    def __init__(self, endereco_servidor, endereco_lider):
+        self.ip = endereco_servidor[0]
+        self.porta = endereco_servidor[1]
+        self.endereco_servidor = endereco_servidor
+        self.ip_lider= endereco_lider[0]
+        self.porta_lider = endereco_lider[1]
+        self.endereco_lider = endereco_lider
         self.tabelahash = {}  # Tabela hash local para armazenar as chaves e valores das requisições PUT
         self.servidores_conectados = []  # Lista para armazenar os endereços dos servidores conectados ao líder
 
+    # Seção 5.a - Parte 2 - Inicialização do Servidor
     def inicializar(self):
         self.socket_servidor = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         
@@ -22,200 +26,164 @@ class Servidor:
         self.socket_servidor.bind((self.ip, self.porta))
         self.socket_servidor.listen(5)
         
-        #### Tirar esta mensagem
-        print(f"Servidor iniciado em {self.ip}:{self.porta}")
-
         # Caso não seja líder, envie endereço próprio para o líder armazenar
-        if(self.ip != self.ip_lider and self.porta != self.porta_lider):
-            self.enviar_servidor_join(self.ip, self.porta)
+        if not (self.eh_lider()):
+            self.enviar_servidor_join()
 
-        self.executar()
+        self.executa_thread()
 
-    def tratar_requisicoes(self, conexao, endereco):
-        while True:
-            mensagem_serializada = conexao.recv(1024).decode()
-            if not mensagem_serializada:
-                break
-            
-            mensagem = Mensagem.from_json(mensagem_serializada)
-            if mensagem.tipo == "PUT":
-                if self.ip == self.ip_lider and self.porta == self.porta_lider:
-                    self.processar_requisicao_put(mensagem, conexao)
-                else:
-                    self.encaminhar_put(mensagem)
-            elif mensagem.tipo == "REPLICATION":
-                self.receber_requisicao_replication(mensagem)
-            elif mensagem.tipo == "REPLICATION_OK":
-                self.receber_requisicao_replication_ok(mensagem)
-            elif mensagem.tipo == "GET":
-                self.receber_requisicao_get(mensagem)
-            elif mensagem.tipo == "servidor_JOIN":
-                self.adiciona_servidor(mensagem)
-                # self.servidores_conectados.append((ip,porta))
-                pass
+    ## AUXILIAR -> Bool True = Líder; False = Não_líder
+    def eh_lider(self):
+        return (self.ip == self.ip_lider and self.porta == self.porta_lider)
 
-        print(f"Conexão encerrada: {endereco}")
-    
-    def adiciona_servidor(self, mensagem):
-        # Processar a requisição SERVIDOR_JOIN e enviar replicação para os servidores secundários
-        servidor_ip = mensagem.ip
-        servidor_porta = mensagem.porta
-        self.servidores_conectados.append((servidor_ip, servidor_porta))
-    
-    def receber_requisicoes(self):
-        while True:
-            conexao, endereco = self.socket_servidor.accept()
-            print(f"Nova conexão estabelecida (TEM QUE REMOVER ISTO): {endereco}")
-            threading.Thread(target=self.tratar_requisicoes, args=(conexao, endereco)).start()
-    
-    def encaminhar_put(self, mensagem):
-
-        try:
-            conexao_lider = socket.socket()
-            conexao_lider.connect((self.ip_lider, self.porta_lider))
-            conexao_lider.send(mensagem.to_json().encode())
-
-            # O servidor secundário não espera por uma resposta do líder
-            conexao_lider.close()
-
-        except Exception as e:
-            print(f"Erro ao encaminhar PUT para o líder: {e}")
-    
-    def processar_requisicao_put(self, mensagem, conexao_cliente):
-        # Processar a requisição PUT e enviar replicação para os servidores secundários
-        chave = mensagem.key
-        valor = mensagem.value
-        self.tabelahash[chave] = valor
-
-        # Enviar a replicação para os servidores secundários
-        self.replicar_informacao(mensagem)
-
-        # Enviar resposta PUT_OK para o cliente
-        self.enviar_put_ok(chave, mensagem.timestamp)    
-    
-    def replicar_informacao(self, mensagem):
-        if not (self.ip == self.ip_lider and self.porta == self.porta_lider):
-            # O servidor não deve replicar informações se não for o líder
-            return
-        for endereco_servidor in self.servidores_conectados:  # Exclui o próprio líder da lista
-            try:
-                conexao_secundario = socket.socket()
-                conexao_secundario.connect(endereco_servidor)
-                mensagem_replicacao = Mensagem(
-                    tipo="REPLICATION",
-                    key=mensagem.key,
-                    value=mensagem.value,
-                    timestamp=mensagem.timestamp,
-                    timestamp_servidor=mensagem.timestamp_servidor
-                )
-                conexao_secundario.send(mensagem_replicacao.to_json().encode())
-
-                # O líder não espera por uma resposta dos servidores secundários
-                conexao_secundario.close()
-
-            except Exception as e:
-                print(f"Erro ao replicar informação para o servidor secundário: {e}")
-    
-    def enviar_put_ok(self, mensagem):
-        if not (self.ip == self.ip_lider and self.porta == self.porta_lider):
-            # Somente o líder deve enviar PUT_OK para o cliente
-            return
-
-        try:
-            cliente_ip = mensagem.timestamp_servidor
-            cliente_porta = mensagem.timestamp
-            conexao_cliente = socket.socket()
-            conexao_cliente.connect((cliente_ip, cliente_porta))
-            mensagem_put_ok = Mensagem(
-                tipo="PUT_OK",
-                key=mensagem.key,
-                value=mensagem.value,
-                timestamp=mensagem.timestamp,
-                timestamp_servidor=mensagem.timestamp_servidor
-            )
-            conexao_cliente.send(mensagem_put_ok.to_json().encode())
-
-            # O líder não espera por uma resposta do cliente
-            conexao_cliente.close()
-
-        except Exception as e:
-            print(f"Erro ao enviar PUT_OK para o cliente: {e}")
-
-    def enviar_servidor_join(self, ip, porta):
-        try:
-            mensagem = Mensagem("servidor_JOIN", ip=ip, porta=porta)
-            mensagem_serializada = mensagem.to_json()
+    ## AUXILIAR -> Servidor envia mensagem para conectar com o Servidor Líder e passar seu endereço
+    def enviar_servidor_join(self):
+            mensagem = Mensagem("SERVIDOR_JOIN", self.endereco_servidor)
+            mensagem_serializada = mensagem.to_json().encode()
             
             # Envia a mensagem serializada através da conexão com o servidor
-            conexao_server = socket.socket()
-            conexao_server.connect((self.ip_lider,self.porta_lider))
-            conexao_server.send(mensagem_serializada.encode())
+            conexao_lider = socket.socket()
+            conexao_lider.connect(self.endereco_lider)
+            conexao_lider.send(mensagem_serializada)
 
-            conexao_server.close()
-            
-        except Exception as e:
-            print(f"Erro ao enviar a requisição servidor_join: {e}")
+            conexao_lider.close()
     
-    def receber_requisicao_replication(self, mensagem):
-        self.tabelahash[mensagem.key] = mensagem.value
-        # Líder não precisa enviar resposta para o servidor secundário
-        print(f"Recebida replicação para a chave '{mensagem.key}'")
-    
-    def receber_requisicao_replication_ok(self, mensagem):
-        # Verificar se a chave da requisição PUT existe no dicionário de respostas_replicacao
-        chave = mensagem.key
-        if chave not in self.respostas_replicacao:
-            self.respostas_replicacao[chave] = set()  # Conjunto para armazenar as respostas
-
-        # Adicionar a resposta de replicação_ok ao conjunto correspondente
-        self.respostas_replicacao[chave].add(mensagem.timestamp_servidor)
-
-        # Verificar se todas as respostas foram recebidas para enviar PUT_OK para o cliente
-        if len(self.respostas_replicacao[chave]) == len(self.endereco_servidores) - 1:
-            self.enviar_put_ok(chave, mensagem.timestamp)
-    
-    def receber_requisicao_get(self, mensagem):
-        chave = mensagem.key
-        if chave in self.tabelahash:
-            valor = self.tabelahash[chave]
-            resposta = Mensagem(
-                tipo="GET_RESPONSE",
-                key=chave,
-                value=valor,
-                timestamp=mensagem.timestamp,
-                timestamp_servidor=mensagem.timestamp_servidor
-            )
-        else:
-            resposta = Mensagem(
-                tipo="GET_RESPONSE",
-                key=chave,
-                value=None,
-                timestamp=mensagem.timestamp,
-                timestamp_servidor=mensagem.timestamp_servidor
-            )
-
-        try:
-            conexao_cliente = socket.socket()
-            conexao_cliente.connect((mensagem.timestamp_servidor, mensagem.timestamp))
-            conexao_cliente.send(resposta.to_json().encode())
-
-            # O líder não espera por uma resposta do cliente
-            conexao_cliente.close()
-
-        except Exception as e:
-            print(f"Erro ao enviar resposta GET para o cliente: {e}")
-
-    def executar(self):
+    # Seção 5.b - Recebe e responde simultaneamente (com uso de Threads).            
+    def executa_thread(self):
         while True:
-            conexao, endereco = self.socket_servidor.accept()
-            print(f"Nova conexão estabelecida: {endereco}")
-            threading.Thread(target=self.tratar_requisicoes, args=(conexao, endereco)).start()
-    
+            conexao, _ = self.socket_servidor.accept()
+            
+            threading.Thread(target=self.tratar_requisicoes, args=(conexao, )).start()
+
+                
+    ## AUXILIAR -> Trata os tipos de Requisições.
+        # Obrigatórias = PUT, REPLICATION, REPLICATION_OK, GET
+        # Auxiliares = SERVIDOR_JOIN
+    def tratar_requisicoes(self, conexao):
+        mensagem_serializada = conexao.recv(1024).decode()
+        
+        mensagem = Mensagem.from_json(mensagem_serializada)
+        
+        # Tipos de requisição
+        if mensagem:
+            # Seção 5.c - Processa PUT e Envia Resposta para o Peer
+            if mensagem.tipo == "PUT":
+                # Timestamp para enviar para o Peer
+                timestamp = self.processar_requisicao_put(mensagem.conteudo)
+                
+                # Seção 5.c.3/5.e - Resposta para o Peer
+                resposta = Mensagem('PUT_OK', timestamp)
+                resposta_serializada = resposta.to_json().encode()
+                conexao.send(resposta_serializada) 
+            
+            # Seção 5.d - Recebe REPLICATION
+            elif mensagem.tipo == "REPLICATION":
+                
+                # Insere {key: (value, timestamp)} na tabela Hash Local
+                self.tabelahash.update({mensagem.conteudo[0]:(mensagem.conteudo[1], mensagem.conteudo[2])})
+                
+                # Cria e envia a mensagem de REPLICATION_OK para o Líder. 
+                resposta = Mensagem('REPLICATION_OK', None)
+                resposta_serializada = resposta.to_json().encode()
+                conexao.send(resposta_serializada)
+
+            elif mensagem.tipo == "GET":
+                resultado = self.receber_requisicao_get(mensagem.conteudo)
+                
+                if isinstance(resultado, tuple):
+                    resposta = Mensagem('GET_OK', resultado)
+                    resposta_serializada = resposta.to_json().encode()
+                    conexao.send(resposta_serializada)
+                else:
+                    resposta = Mensagem('ERRO', resultado)
+                    resposta_serializada = resposta.to_json().encode()
+                    conexao.send(resposta_serializada)
+                
+            ## AUXILIAR -> Adiciona servidor à lista de servidores_conectados ao Líder
+            elif mensagem.tipo == "SERVIDOR_JOIN":
+                self.servidores_conectados.append(tuple(mensagem.conteudo))
+        
+        conexao.close()
+        return
+
+    # Seção 5.c - Requisição PUT
+    def processar_requisicao_put(self, conteudo):
+        (chave, valor) = conteudo
+        
+        # Seção 5.c - Caso Não Líder
+        if not self.eh_lider():
+            timestamp = self.encaminhar_put_para_lider(conteudo) 
+             
+        # Seção 5.c - Caso Líder                  
+        else:
+            # Atualiza Timestamp com a hora
+            timestamp = time.time()
+            
+            for endereco_servidor in self.servidores_conectados:
+                    # Líder Cria conexão com os servidores_conectados
+                    conexao_servidor = socket.socket()
+                    conexao_servidor.connect(endereco_servidor)
+                    
+                    # Seção 5.c.2 - Cria e envia Mensagem serializada de replicação para os servidores
+                    mensagem_replicacao = Mensagem('REPLICATION', [chave, valor, timestamp])
+                    mensagem_replicacao_serializada = mensagem_replicacao.to_json().encode()
+                    conexao_servidor.send(mensagem_replicacao_serializada)
+
+                    # Seção 5.e - Recebe REPLICATION_OK dos Servidores
+                    resposta_serializada = conexao_servidor.recv(1024).decode()
+                    resposta = Mensagem.from_json(resposta_serializada)
+                    
+                    # Assegura que o tipo da resposta seja "REPLICATION_OK"  
+                    assert resposta.tipo == 'REPLICATION_OK'
+                    
+        # Seção 5.c.1 (Caso Líder) 
+        self.tabelahash.update({chave:(valor, timestamp)})
+        
+        return timestamp
+
+    # Seção 5.c - Caso Não Líder
+    def encaminhar_put_para_lider(self, conteudo):
+        
+        # Cria e serializa a mensagem para o Líder (repassando a mensagem)
+        mensagem_put_para_lider = Mensagem("PUT", conteudo)
+        mensagem_serializada = mensagem_put_para_lider.to_json().encode()
+        
+        # Cria conexão e envia PUT para o Líder
+        conexao_lider = socket.socket()
+        conexao_lider.connect(self.endereco_lider)
+        conexao_lider.send(mensagem_serializada)
+        
+        # Seção 5.d Recebe REPLICATION do Líder (A inserção na tabela Hash Local é feita ao final de processar_requisição_put)
+        resposta_serializada = conexao_lider.recv(1024).decode()
+        resposta = Mensagem.from_json(resposta_serializada)
+        
+        # Fecha conexão com lider
+        conexao_lider.close()
+        
+        # TimeStamp retornado pelo Líder        
+        timestamp = resposta.conteudo
+        
+        return timestamp        
+                
+    def receber_requisicao_get(self, conteudo):
+        (chave, timestamp) = conteudo
+        
+        if chave in self.tabelahash:
+            if timestamp <= self.tabelahash[chave][1]:
+                print(self.tabelahash[chave])
+                return self.tabelahash[chave]                
+            else:
+                return "Tente novamente mais tarde"
+        else:
+            return (0, time.time())
 
 if __name__ == "__main__":
+    
+    # Seção 5.a - Parte 1 - Captura de Dados
     servidor_ip = input("Servidor IP: ")
     servidor_porta = int(input("Servidor Porta: "))
     servidor_ip_lider = input("Servidor Líder IP: ")
     servidor_porta_lider = int(input("Servidor Líder Porta: "))
-    servidor = Servidor(servidor_ip, servidor_porta, servidor_ip_lider, servidor_porta_lider)
+    servidor = Servidor((servidor_ip, servidor_porta), (servidor_ip_lider, servidor_porta_lider))
+    # Seção 5.a - Parte 2- Inicialização do Servidor
     servidor.inicializar()
