@@ -32,9 +32,10 @@ class Peer:
             if (opcao == "1"):
                 break
         
-
+        # Seção 4.a - Inicialização do Peer
         self.inicializar()
 
+        # Menu Interativo
         while True:        
             print("\nMenu Interativo")
             print("1. PUT")
