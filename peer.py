@@ -12,8 +12,7 @@ class Peer:
 
     # Seção 4.a - Inicialização do Peer
     def inicializar(self):
-        ## Atualizar para 3 Servidores
-        num_servidores = 2  # Número de servidores
+        num_servidores = 3  # Número de servidores
 
         # Espera por IP e Porta do num_servidores
         for i in range(num_servidores):
@@ -89,7 +88,7 @@ class Peer:
             self.tabelahash.update({chave:( valor, resposta.conteudo)})
 
             # Seção 6 (Peer) - Print PUT_OK
-            print(f"PUT_OK key: {chave} value: {valor} timestamp: {resposta.conteudo}")
+            print(f"PUT_OK key: {chave} value: {valor} timestamp: {resposta.conteudo} realizada no servidor {servidor_escolhido[0]}:{servidor_escolhido[1]}")
 
  
     # Seção 4.c - Envio da Requisicação GET     
@@ -124,11 +123,11 @@ class Peer:
         # Tratamento da Resposta GET
         if resposta.tipo == 'GET_OK':
             self.tabelahash.update({chave:resposta.conteudo})
-            print(f'{chave}:{resposta.conteudo}')
-        elif resposta.tipo == 'ERRO':
-            print('TRY_OTHER_SERVER_OR_LATER')
+            print(f'GET key: {chave} value: {resposta.conteudo[0]} obtido do servidor {servidor_escolhido[0]}:{servidor_escolhido[1]}, meu timestamp {timestamp} e do servidor {resposta.conteudo[1]}')
+        elif resposta.tipo == 'NULL':
+            print('NULL')
         else:
-            print('Erro Inesperado. A resposta obtida foi: ', resposta)
+            print('TRY_OTHER_SERVER_OR_LATER')
             
  
 # Seção para inicialização do peer

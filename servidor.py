@@ -52,25 +52,29 @@ class Servidor:
     def executa_thread(self):
         while True:
             conexao, _ = self.socket_servidor.accept()
-            
-            threading.Thread(target=self.tratar_requisicoes, args=(conexao, )).start()
+            endereco_peer = conexao.getpeername()
+            threading.Thread(target=self.tratar_requisicoes, args=(conexao, endereco_peer)).start()
 
                 
     ## AUXILIAR -> Trata os tipos de Requisições.
         # Obrigatórias = PUT, REPLICATION, REPLICATION_OK, GET
         # Auxiliares = SERVIDOR_JOIN
-    def tratar_requisicoes(self, conexao):
+    def tratar_requisicoes(self, conexao, endereco_peer):
+        (peer_ip, peer_porta) = endereco_peer
         mensagem_serializada = conexao.recv(1024).decode()
         
         mensagem = Mensagem.from_json(mensagem_serializada)
-        
         # Tipos de requisição
         if mensagem:
-            # Seção 5.c - Processa PUT e Envia Resposta para o Peer
+            # Seção 5.c - Recebe PUT e Envia Resposta para o Peer
             if mensagem.tipo == "PUT":
                 # Timestamp para enviar para o Peer
-                timestamp = self.processar_requisicao_put(mensagem.conteudo)
+                timestamp = self.processar_requisicao_put(mensagem.conteudo, endereco_peer)
                 
+                # Enviar valor de timestamp original. Força erro TRY_ANOTHER_SERVER_OR_LATER caso Servidor tenha porta par (10098)
+                if(self.porta%2 == 0):
+                    timestamp = timestamp*2
+                    
                 # Seção 5.c.3/5.e - Resposta para o Peer
                 resposta = Mensagem('PUT_OK', timestamp)
                 resposta_serializada = resposta.to_json().encode()
@@ -78,26 +82,42 @@ class Servidor:
             
             # Seção 5.d - Recebe REPLICATION
             elif mensagem.tipo == "REPLICATION":
-                
+                (chave, valor, timestamp) = mensagem.conteudo
+                # Faz o valor de TimeStamp ser metade do original. Força erro TRY_ANOTHER_SERVER_OR_LATER caso a Porta do Servidor seja par (10098)
+                if(self.porta%2 == 0):
+                    timestamp = float(timestamp/2)
                 # Insere {key: (value, timestamp)} na tabela Hash Local
-                self.tabelahash.update({mensagem.conteudo[0]:(mensagem.conteudo[1], mensagem.conteudo[2])})
+                print(timestamp)
+                self.tabelahash.update({chave:(valor, timestamp)})
+                
+                # Print do console (REPLICATION)
+                print(f"REPLICATION key:{chave} value:{valor} ts:{timestamp}")
                 
                 # Cria e envia a mensagem de REPLICATION_OK para o Líder. 
                 resposta = Mensagem('REPLICATION_OK', None)
                 resposta_serializada = resposta.to_json().encode()
                 conexao.send(resposta_serializada)
 
+            # Seção 5.f - Recebe GET
             elif mensagem.tipo == "GET":
                 resultado = self.receber_requisicao_get(mensagem.conteudo)
+                (chave, valor) = mensagem.conteudo
                 
                 if isinstance(resultado, tuple):
                     resposta = Mensagem('GET_OK', resultado)
                     resposta_serializada = resposta.to_json().encode()
                     conexao.send(resposta_serializada)
-                else:
+                    print(f"Cliente {peer_ip}:{peer_porta} GET key:{chave} ts:{valor}. Meu ts é {self.tabelahash[chave][1]}, portanto devolvendo {self.tabelahash[chave][0]}")
+                elif resultado == "TRY_ANOTHER_SERVER_OR_LATER":
                     resposta = Mensagem('ERRO', resultado)
                     resposta_serializada = resposta.to_json().encode()
                     conexao.send(resposta_serializada)
+                    print(f"Cliente {peer_ip}:{peer_porta} GET key:{chave} ts:{valor}. Meu ts é {self.tabelahash[chave][1]}, portanto devolvendo TRY_ANOTHER_SERVER_OR_LATER")
+                else:
+                    resposta = Mensagem('NULL', resultado)
+                    resposta_serializada = resposta.to_json().encode()
+                    conexao.send(resposta_serializada)
+                    print(f"Cliente {peer_ip}:{peer_porta} GET key:{chave} ts:{valor}. Meu ts é 0, portanto devolvendo NULL")
                 
             ## AUXILIAR -> Adiciona servidor à lista de servidores_conectados ao Líder
             elif mensagem.tipo == "SERVIDOR_JOIN":
@@ -107,15 +127,23 @@ class Servidor:
         return
 
     # Seção 5.c - Requisição PUT
-    def processar_requisicao_put(self, conteudo):
+    def processar_requisicao_put(self, conteudo, endereco_peer):
         (chave, valor) = conteudo
+        (peer_ip, peer_porta) = endereco_peer
         
         # Seção 5.c - Caso Não Líder
         if not self.eh_lider():
-            timestamp = self.encaminhar_put_para_lider(conteudo) 
+            # Print PUT Não Líder
+            print(f"\nEncaminhando PUT key:{chave} value:{valor}")
+            timestamp = self.encaminhar_put_para_lider(conteudo)
+            # Forçando erro no servidor de porta par (10098)
+            if(self.porta%2 == 0):
+                timestamp = float(timestamp/2)
              
         # Seção 5.c - Caso Líder                  
         else:
+            # Print PUT Líder
+            print(f"\nCliente {peer_ip}:{peer_porta} PUT key:{chave} value:{valor}")
             # Atualiza Timestamp com a hora
             timestamp = time.time()
             
@@ -135,9 +163,14 @@ class Servidor:
                     
                     # Assegura que o tipo da resposta seja "REPLICATION_OK"  
                     assert resposta.tipo == 'REPLICATION_OK'
+            
+            print(f"Enviando PUT_OK ao Cliente {peer_ip}:{peer_porta} da key:{chave} ts:{timestamp}")
                     
-        # Seção 5.c.1 (Caso Líder) 
+        # Seção 5.c.1 e 5.d (Atualizar/Inserir Dados na Tabela Hash) 
         self.tabelahash.update({chave:(valor, timestamp)})
+        
+        # Print Console PUT_OK
+
         
         return timestamp
 
@@ -164,18 +197,21 @@ class Servidor:
         timestamp = resposta.conteudo
         
         return timestamp        
-                
+
+    # Seção 5.f - Requisição GET                
     def receber_requisicao_get(self, conteudo):
         (chave, timestamp) = conteudo
         
+        # Se a chave existe
         if chave in self.tabelahash:
+            # Se o TimeStamp do Peer é menor ou igual ao da Tabela Hash do Servidor
             if timestamp <= self.tabelahash[chave][1]:
-                print(self.tabelahash[chave])
                 return self.tabelahash[chave]                
             else:
-                return "Tente novamente mais tarde"
+                return "TRY_ANOTHER_SERVER_OR_LATER"
+        # Caso Não Exista
         else:
-            return (0, time.time())
+            return None
 
 if __name__ == "__main__":
     
