@@ -2,9 +2,7 @@ import socket
 from mensagem import Mensagem
 import random
 
-
 class Peer:
-    
     # Atributos da Classe
     def __init__(self):
         self.endereco_servidores = [] #Armazena as conexões com os servidores
@@ -12,7 +10,6 @@ class Peer:
 
     # Seção 6 (Peer) - Menu Interativo
     def exibir_menu(self):
-        
         # Forçar Inicialização do Peer
         while True:
             opcao = input("Aperte 1 para Inicializar o Peer:")
@@ -41,8 +38,6 @@ class Peer:
                 chave = input("Digite a chave: ")
                 self.enviar_requisicao_get(chave)
             
-
-
     # Seção 4.a - Inicialização do Peer
     def inicializar(self):
         num_servidores = 3  # Número de servidores
@@ -122,9 +117,7 @@ class Peer:
         else:
             print('TRY_OTHER_SERVER_OR_LATER')
             
- 
 # Seção para inicialização do peer
 if __name__ == "__main__":
     peer = Peer()
     peer.exibir_menu()
-

@@ -173,7 +173,7 @@ class Servidor:
                 # Assegura que o tipo da resposta seja "REPLICATION_OK"  
                 assert resposta.tipo == 'REPLICATION_OK'   
                      
-    # Seção 5.f - Requisição GET                
+    # Seção 5.f - Trata Requisição GET                
     def receber_requisicao_get(self, conteudo):
         (chave, timestamp) = conteudo
         
@@ -224,10 +224,7 @@ class Servidor:
             conexao_lider.send(mensagem_serializada)
 
             conexao_lider.close()
-
-
-
-            
+           
 if __name__ == "__main__":
     
     # Seção 5.a - Parte 1 - Captura de Dados
