@@ -4,28 +4,16 @@ import random
 
 
 class Peer:
-    ## Verificado
+    
+    # Atributos da Classe
     def __init__(self):
         self.endereco_servidores = [] #Armazena as conexões com os servidores
         self.tabelahash = {} # Tabela hash
 
-
-    # Seção 4.a - Inicialização do Peer
-    def inicializar(self):
-        num_servidores = 3  # Número de servidores
-
-        # Espera por IP e Porta do num_servidores
-        for i in range(num_servidores):
-            ip = input(f"Informe o IP do servidor {i+1}: ")
-            porta = int(input(f"Informe a porta do servidor {i+1}: "))
-            
-            # Adiciona na lista endereco_servidores
-            self.endereco_servidores.append((ip, porta))                    
-
     # Seção 6 (Peer) - Menu Interativo
     def exibir_menu(self):
         
-        # Responsável por obrigar a inicialização do Peer
+        # Forçar Inicialização do Peer
         while True:
             opcao = input("Aperte 1 para Inicializar o Peer:")
             if (opcao == "1"):
@@ -53,14 +41,20 @@ class Peer:
                 chave = input("Digite a chave: ")
                 self.enviar_requisicao_get(chave)
             
-            # Encerra Programa
-            elif opcao == "0":
-                break
+
+
+    # Seção 4.a - Inicialização do Peer
+    def inicializar(self):
+        num_servidores = 3  # Número de servidores
+
+        # Espera por IP e Porta do num_servidores
+        for i in range(num_servidores):
+            ip = input(f"Informe o IP do servidor {i+1}: ")
+            porta = int(input(f"Informe a porta do servidor {i+1}: "))
             
-            # Número fora das possibilidades
-            else:
-                print("Opção inválida. Por favor, escolha uma opção válida.")
-        
+            # Adiciona na lista endereco_servidores
+            self.endereco_servidores.append((ip, porta))  
+                    
     # Seção 4.b - Envio do PUT
     def enviar_requisicao_put(self, chave, valor):
         
@@ -90,7 +84,6 @@ class Peer:
             # Seção 6 (Peer) - Print PUT_OK
             print(f"PUT_OK key: {chave} value: {valor} timestamp: {resposta.conteudo} realizada no servidor {servidor_escolhido[0]}:{servidor_escolhido[1]}")
 
- 
     # Seção 4.c - Envio da Requisicação GET     
     def enviar_requisicao_get(self, chave):
         
