@@ -87,7 +87,6 @@ class Servidor:
                 if(self.porta%2 == 0):
                     timestamp = float(timestamp/2)
                 # Insere {key: (value, timestamp)} na tabela Hash Local
-                print(timestamp)
                 self.tabelahash.update({chave:(valor, timestamp)})
                 
                 # Print do console (REPLICATION)
